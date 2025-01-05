@@ -1,0 +1,4 @@
+pyCairo
+pygobject
+dbus-python
+pillow
