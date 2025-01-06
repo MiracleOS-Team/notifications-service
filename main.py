@@ -30,6 +30,7 @@ class NotificationDaemon(dbus.service.Object):
             self.open_notifications = json.load(open(os.path.join(os.getenv("HOME"), ".config/miracleos/notifications.json")))
             for notif in self.open_notifications:
                 self.id_counter = max(self.id_counter, int(notif))
+            self.id_counter += 1
         except:
             pass
 
@@ -82,6 +83,12 @@ class NotificationDaemon(dbus.service.Object):
             img_path = self._save_image(notification['hints']['image-data'])
 
             eww_str += f":image '{img_path}' "
+        elif "image-path" in notification['hints']:
+            eww_str += f":image '{notification['hints']['image-path'].replace("file://", "")}' "
+        elif "icon_data" in notification['hints']:
+            img_path = self._save_image(notification['hints']['icon_data'])
+
+            eww_str += f":image '{img_path}' "
 
         human_readable = datetime.fromtimestamp(notification['timestamp']).strftime("%H:%M")
         eww_str += f":time '{human_readable}' "
@@ -104,14 +111,23 @@ class NotificationDaemon(dbus.service.Object):
     @dbus.service.method('org.freedesktop.Notifications', in_signature='', out_signature='as')
     def GetCapabilities(self):
         # Return supported capabilities (e.g., body text, actions, images)
-        return ['body', 'actions', 'icon-static', 'icon']
+        # TODO: Actions
+        return ['body', "body-hyperlinks", 'icon-static', 'persistence']
 
     @dbus.service.method('org.freedesktop.Notifications', in_signature='u', out_signature='')
     def CloseNotification(self, notification_id):
         print(f"Notification {notification_id} closed")
+
         if notification_id in self.open_notifications:
             del self.open_notifications[notification_id]
         self._update_notification_count()
+
+        self.NotificationClosed(notification_id, 3)
+
+    @dbus.service.signal('org.freedesktop.Notifications', signature='uu')
+    def NotificationClosed(self, notification_id, reason):
+        """Signal emitted when a notification is closed."""
+        pass
 
     @dbus.service.method(
         'org.freedesktop.Notifications',
@@ -127,6 +143,10 @@ class NotificationDaemon(dbus.service.Object):
         if "image-data" in hints:
             hints["image-data"] = self.decode_image_to_base64(hints["image-data"])
             print("Received image decoded to base64")
+
+        if "icon_data" in hints:
+            hints["icon_data"] = self.decode_image_to_base64(hints["icon_data"])
+            print("Received icon decoded to base64")
 
         print("Notification received:")
         print(f"  App Name: {app_name}")
