@@ -78,6 +78,7 @@ class NotificationDaemon(dbus.service.Object):
         eww_str += f":app_image '{notification['app_icon']}' " if notification['app_icon'] != "" else ":app_image '/usr/share/icons/MiracleOSIcons/16x16/mimetypes/application-x-executable.png' "
         eww_str += f":urgency {str(int(notification['hints']['urgency']))} "
         eww_str += f":desktop '{notification['hints']['desktop-entry']}' " if 'desktop-entry' in notification['hints'] else ""
+        eww_str += f":id {notification_id} "
 
         if "image-data" in notification['hints']:
             img_path = self._save_image(notification['hints']['image-data'])
@@ -106,17 +107,24 @@ class NotificationDaemon(dbus.service.Object):
         # Update Eww Notifications
         eww_notifications = [self._translate_notification_for_eww(notif) for notif in self.open_notifications]
         with open(os.path.join(os.getenv("HOME"), ".config/miracleos/eww_notifications.json"), "w") as f:
-            json.dump(eww_notifications, f, indent=4)
+            json.dump(eww_notifications, f)
 
     @dbus.service.method('org.freedesktop.Notifications', in_signature='', out_signature='as')
     def GetCapabilities(self):
         # Return supported capabilities (e.g., body text, actions, images)
         # TODO: Actions
-        return ['body', "body-hyperlinks", 'icon-static', 'persistence']
+        return ['body', "body-hyperlinks", 'icon-static', 'persistence', "actions"]
 
     @dbus.service.method('org.freedesktop.Notifications', in_signature='u', out_signature='')
     def CloseNotification(self, notification_id):
         print(f"Notification {notification_id} closed")
+
+        if notification_id == 4294967295:
+            for notif in list(self.open_notifications.keys()):
+                del self.open_notifications[notif]
+            self._update_notification_count()
+            self.NotificationClosed(notification_id, 3)
+            return
 
         if notification_id in self.open_notifications:
             del self.open_notifications[notification_id]
